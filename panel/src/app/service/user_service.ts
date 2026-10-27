@@ -29,7 +29,7 @@ class UserSubsystem {
     // injection), blank names and absurd lengths; unicode stays allowed.
     if (!this.validateUserName(config.userName))
       throw new Error($t("TXT_CODE_router.user.invalidUserName"));
-    const requestedUuid = typeof config.uuid === "string" ? config.uuid.trim() : "";
+    const requestedUuid = this.normalizeUuid(config.uuid);
     if (requestedUuid && !this.validateUuid(requestedUuid)) {
       throw new Error("Invalid user uuid");
     }
@@ -119,6 +119,13 @@ class UserSubsystem {
       /^[0-9a-f]{32}$/i.test(uuid) ||
       /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(uuid)
     );
+  }
+
+  // MCSM's native user UUID format is 32 lowercase hex chars without dashes.
+  // Casdoor's subject is a dashed UUID, so strip the separators for storage
+  // while keeping the original dashed value in `ssoSub`.
+  normalizeUuid(uuid?: string) {
+    return typeof uuid === "string" ? uuid.replace(/-/g, "").trim().toLowerCase() : "";
   }
 
   check2FA(code: string, user: IUser, totpDriftToleranceSteps: number = 0) {
@@ -258,12 +265,13 @@ class UserSubsystem {
     if (!instance) throw new Error("User not found");
 
     let finalUuid = uuid;
-    if (adoptUuid && ssoSub !== uuid && this.validateUuid(ssoSub)) {
-      if (this.hasInstance(ssoSub)) throw new Error("User uuid already exists");
+    const candidateUuid = this.normalizeUuid(ssoSub);
+    if (adoptUuid && candidateUuid !== uuid && this.validateUuid(candidateUuid)) {
+      if (this.hasInstance(candidateUuid)) throw new Error("User uuid already exists");
       this.objects.delete(uuid);
-      instance.uuid = ssoSub;
-      this.objects.set(ssoSub, instance);
-      finalUuid = ssoSub;
+      instance.uuid = candidateUuid;
+      this.objects.set(candidateUuid, instance);
+      finalUuid = candidateUuid;
     }
 
     instance.ssoSub = ssoSub;

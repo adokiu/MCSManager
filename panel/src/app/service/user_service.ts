@@ -29,7 +29,14 @@ class UserSubsystem {
     // injection), blank names and absurd lengths; unicode stays allowed.
     if (!this.validateUserName(config.userName))
       throw new Error($t("TXT_CODE_router.user.invalidUserName"));
-    const newUuid = v4().replace(/-/gim, "");
+    const requestedUuid = typeof config.uuid === "string" ? config.uuid.trim() : "";
+    if (requestedUuid && !this.validateUuid(requestedUuid)) {
+      throw new Error("Invalid user uuid");
+    }
+    if (requestedUuid && this.hasInstance(requestedUuid)) {
+      throw new Error("User uuid already exists");
+    }
+    const newUuid = requestedUuid || v4().replace(/-/gim, "");
     // Initialize necessary user data
     const instance = new User();
     instance.uuid = newUuid;
@@ -101,6 +108,17 @@ class UserSubsystem {
     if (/[\u0000-\u001f\u007f]/.test(userName)) return false;
     if (userName.trim().length === 0) return false;
     return true;
+  }
+
+  // User UUIDs are storage keys / file names, so only accept a plain UUID
+  // (Casdoor's dashed form) or the legacy 32-char hex form. This also prevents
+  // path traversal when an IdP subject is used as the user UUID.
+  validateUuid(uuid?: string) {
+    if (typeof uuid !== "string") return false;
+    return (
+      /^[0-9a-f]{32}$/i.test(uuid) ||
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(uuid)
+    );
   }
 
   check2FA(code: string, user: IUser, totpDriftToleranceSteps: number = 0) {
@@ -235,12 +253,23 @@ class UserSubsystem {
     return count;
   }
 
-  async bindSso(uuid: string, ssoSub: string) {
+  async bindSso(uuid: string, ssoSub: string, adoptUuid = false) {
     const instance = this.getInstance(uuid);
     if (!instance) throw new Error("User not found");
+
+    let finalUuid = uuid;
+    if (adoptUuid && ssoSub !== uuid && this.validateUuid(ssoSub)) {
+      if (this.hasInstance(ssoSub)) throw new Error("User uuid already exists");
+      this.objects.delete(uuid);
+      instance.uuid = ssoSub;
+      this.objects.set(ssoSub, instance);
+      finalUuid = ssoSub;
+    }
+
     instance.ssoSub = ssoSub;
     instance.ssoBound = true;
-    await Storage.getStorage().store("User", uuid, instance);
+    await Storage.getStorage().store("User", finalUuid, instance);
+    if (finalUuid !== uuid) await Storage.getStorage().delete("User", uuid);
   }
 
   getQueryWrapper() {

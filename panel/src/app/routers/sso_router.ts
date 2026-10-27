@@ -291,7 +291,7 @@ router.post(
       throw new Error("This account is already bound to another SSO provider");
     }
 
-    await userSystem.bindSso(user.uuid, ssoSub);
+    await userSystem.bindSso(user.uuid, ssoSub, true);
 
     // Clean up session
     delete ctx.session["ssoBindSub"];
@@ -373,6 +373,7 @@ router.post(
     }
 
     const user = await userSystem.create({
+      uuid: userSystem.validateUuid(ssoSub) ? ssoSub : undefined,
       userName,
       passWord,
       permission: ROLE.USER,
@@ -443,7 +444,7 @@ router.post(
       throw new Error("This account is already bound to another SSO provider");
     }
 
-    await userSystem.bindSso(user.uuid, ssoSub);
+    await userSystem.bindSso(user.uuid, ssoSub, true);
 
     delete ctx.session["ssoBindSub"];
     delete ctx.session["ssoBindTimestamp"];

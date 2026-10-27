@@ -210,7 +210,11 @@ router.get(
   "/bind-status",
   permission({ token: false, level: null, speedLimit: false }),
   async (ctx: Koa.ParameterizedContext) => {
-    ctx.body = { pending: Boolean(systemConfig?.ssoEnabled) && hasPendingSsoBind(ctx) };
+    const pending = Boolean(systemConfig?.ssoEnabled) && hasPendingSsoBind(ctx);
+    ctx.body = {
+      pending,
+      ssoSub: pending ? ctx.session?.["ssoBindSub"] : undefined
+    };
   }
 );
 
@@ -292,6 +296,85 @@ router.post(
     });
 
     logger.info(`[SSO] User ${userName} bound to SSO sub: ${ssoSub}`);
+    ctx.body = token;
+  }
+);
+
+// [Public] Create a new MCSManager account from the pending SSO identity.
+// The username is the IdP subject (sub), the user chooses the password, and
+// the account is always a regular user. The new account is bound to the SSO
+// identity in the same operation.
+router.post(
+  "/create",
+  permission({ token: false, level: null }),
+  validator({ body: { password: String } }),
+  async (ctx: Koa.ParameterizedContext) => {
+    if (!systemConfig?.ssoEnabled) {
+      ctx.status = 403;
+      ctx.body = "SSO is not enabled";
+      return;
+    }
+
+    if (!checkBanIp(ctx)) throw new Error($t("TXT_CODE_router.login.ban"));
+
+    if (!ctx.session) throw new Error("Session is null");
+
+    const ssoSub = ctx.session["ssoBindSub"];
+    const ssoBindTimestamp = ctx.session["ssoBindTimestamp"];
+
+    if (!ssoSub) {
+      throw new Error("No pending SSO binding session");
+    }
+
+    if (!ssoBindTimestamp || Date.now() - ssoBindTimestamp > SSO_BIND_SESSION_TTL) {
+      delete ctx.session["ssoBindSub"];
+      delete ctx.session["ssoBindTimestamp"];
+      ctx.session.save();
+      throw new Error("SSO binding session expired");
+    }
+
+    const alreadyBound = userSystem.getUserBySsoSub(ssoSub);
+    if (alreadyBound) {
+      delete ctx.session["ssoBindSub"];
+      delete ctx.session["ssoBindTimestamp"];
+      ctx.session.save();
+      throw new Error("This SSO account is already bound to another user");
+    }
+
+    const passWord = String(ctx.request.body.password);
+    if (!userSystem.validatePassword(passWord)) {
+      throw new Error($t("TXT_CODE_router.user.passwordCheck"));
+    }
+
+    const userName = String(ssoSub);
+    if (!userSystem.validateUserName(userName)) {
+      throw new Error("Invalid SSO user name");
+    }
+    if (userSystem.existUserName(userName)) {
+      throw new Error("This SSO user name already exists");
+    }
+
+    const user = await userSystem.create({
+      userName,
+      passWord,
+      permission: ROLE.USER,
+      ssoSub,
+      ssoBound: true
+    } as any);
+
+    delete ctx.session["ssoBindSub"];
+    delete ctx.session["ssoBindTimestamp"];
+
+    const token = loginSuccess(ctx, user.userName);
+
+    operationLogger.info("user_login", {
+      operator_ip: ctx.ip,
+      operator_name: user.userName,
+      login_result: true,
+      login_method: "sso_create"
+    });
+
+    logger.info(`[SSO] Created user ${user.userName} for sub: ${ssoSub}`);
     ctx.body = token;
   }
 );

@@ -2,7 +2,13 @@
 import CardPanel from "@/components/CardPanel.vue";
 import { router } from "@/config/router";
 import { t } from "@/lang/i18n";
-import { ssoBindCurrent, ssoBindLogin, ssoBindStatus, userInfoApi } from "@/services/apis";
+import {
+  ssoBindCurrent,
+  ssoBindLogin,
+  ssoBindStatus,
+  ssoCreateUser,
+  userInfoApi
+} from "@/services/apis";
 import { useAppStateStore } from "@/stores/useAppStateStore";
 import { sleep } from "@/tools/common";
 import { reportErrorMsg } from "@/tools/validator";
@@ -19,6 +25,7 @@ import { onMounted, reactive, ref } from "vue";
 const { updateUserInfo, isAdmin } = useAppStateStore();
 const { execute: bindExecute } = ssoBindLogin();
 const { execute: bindCurrentExecute } = ssoBindCurrent();
+const { execute: createUserExecute } = ssoCreateUser();
 const { execute: fetchBindStatus } = ssoBindStatus();
 const { execute: fetchUserInfo } = userInfoApi();
 
@@ -32,11 +39,16 @@ const step = ref(1);
 const is2Fa = ref(false);
 const loggedInUserName = ref("");
 const showLoginForm = ref(false);
+const mode = ref<"bind" | "create">("bind");
+const ssoSub = ref("");
+const createPassword = ref("");
+const createPasswordConfirm = ref("");
 
 onMounted(async () => {
   try {
     const status = await fetchBindStatus();
     if (!status.value?.pending) throw new Error("no pending SSO binding");
+    ssoSub.value = status.value?.ssoSub || "";
   } catch {
     router.replace({ path: "/login", query: { sso_error: "invalid_sso_session" } });
     return;
@@ -108,6 +120,41 @@ const handleBind = async () => {
     reportErrorMsg(err);
   }
 };
+
+const isValidPassword = (password: string) => {
+  if (password.length < 9 || password.length > 36) return false;
+  return /(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9])/.test(password);
+};
+
+const handleCreate = async () => {
+  if (!isValidPassword(createPassword.value)) {
+    return message.error(t("TXT_CODE_SSO_BIND_PASSWORD_RULE"));
+  }
+  if (createPassword.value !== createPasswordConfirm.value) {
+    return message.error(t("TXT_CODE_SSO_BIND_PASSWORD_MISMATCH"));
+  }
+  try {
+    step.value = 1;
+    await sleep(400);
+    await createUserExecute({
+      data: {
+        password: createPassword.value
+      }
+    });
+    message.success(t("TXT_CODE_SSO_BIND_CREATE_SUCCESS"));
+    step.value = 2;
+    await updateUserInfo();
+    await sleep(1000);
+    if (isAdmin.value) {
+      router.push({ path: "/" });
+    } else {
+      router.push({ path: "/customer" });
+    }
+  } catch (err: any) {
+    step.value = 0;
+    reportErrorMsg(err);
+  }
+};
 </script>
 
 <template>
@@ -136,6 +183,9 @@ const handleBind = async () => {
                 <SwapOutlined />
                 {{ t("TXT_CODE_SSO_BIND_OTHER_ACCOUNT") }}
               </a-button>
+              <a-button class="mr-10" @click="mode = 'create'; showLoginForm = true">
+                {{ t("TXT_CODE_SSO_BIND_TAB_CREATE") }}
+              </a-button>
               <a-button size="large" type="primary" @click="handleBindCurrent">
                 {{ t("TXT_CODE_SSO_BIND_CURRENT_BTN") }}
               </a-button>
@@ -150,53 +200,114 @@ const handleBind = async () => {
               </a-button>
             </div>
 
-            <form @submit.prevent>
-              <div v-if="!is2Fa">
-                <a-input
-                  v-model:value="formData.username"
-                  class="account"
-                  size="large"
-                  :placeholder="t('TXT_CODE_80a560a1')"
-                >
-                  <template #suffix>
-                    <UserOutlined style="color: rgba(0, 0, 0, 0.45)" />
-                  </template>
-                </a-input>
-                <a-input
-                  v-model:value="formData.password"
-                  class="mt-20 account"
-                  type="password"
-                  :placeholder="t('TXT_CODE_551b0348')"
-                  size="large"
-                  @press-enter="handleBind"
-                >
-                  <template #suffix>
-                    <LockOutlined style="color: rgba(0, 0, 0, 0.45)" />
-                  </template>
-                </a-input>
-              </div>
-              <div v-else>
-                <a-input
-                  v-model:value="formData.code"
-                  class="mt-20 mb-20 account"
-                  type="text"
-                  :placeholder="t('TXT_CODE_7ac8b1d3')"
-                  size="large"
-                  autocomplete="off"
-                  @press-enter="handleBind"
-                >
-                  <template #suffix>
-                    <LockOutlined style="color: rgba(0, 0, 0, 0.45)" />
-                  </template>
-                </a-input>
-              </div>
-            </form>
+            <a-radio-group v-model:value="mode" button-style="solid" class="mb-20">
+              <a-radio-button value="bind">
+                {{ t("TXT_CODE_SSO_BIND_TAB_BIND") }}
+              </a-radio-button>
+              <a-radio-button value="create">
+                {{ t("TXT_CODE_SSO_BIND_TAB_CREATE") }}
+              </a-radio-button>
+            </a-radio-group>
 
-            <div class="mt-24" style="text-align: right">
-              <a-button size="large" type="primary" style="min-width: 95px" @click="handleBind">
-                {{ t("TXT_CODE_SSO_BIND_TITLE") }}
-              </a-button>
-            </div>
+            <template v-if="mode === 'bind'">
+              <form @submit.prevent>
+                <div v-if="!is2Fa">
+                  <a-input
+                    v-model:value="formData.username"
+                    class="account"
+                    size="large"
+                    :placeholder="t('TXT_CODE_80a560a1')"
+                  >
+                    <template #suffix>
+                      <UserOutlined style="color: rgba(0, 0, 0, 0.45)" />
+                    </template>
+                  </a-input>
+                  <a-input
+                    v-model:value="formData.password"
+                    class="mt-20 account"
+                    type="password"
+                    :placeholder="t('TXT_CODE_551b0348')"
+                    size="large"
+                    @press-enter="handleBind"
+                  >
+                    <template #suffix>
+                      <LockOutlined style="color: rgba(0, 0, 0, 0.45)" />
+                    </template>
+                  </a-input>
+                </div>
+                <div v-else>
+                  <a-input
+                    v-model:value="formData.code"
+                    class="mt-20 mb-20 account"
+                    type="text"
+                    :placeholder="t('TXT_CODE_7ac8b1d3')"
+                    size="large"
+                    autocomplete="off"
+                    @press-enter="handleBind"
+                  >
+                    <template #suffix>
+                      <LockOutlined style="color: rgba(0, 0, 0, 0.45)" />
+                    </template>
+                  </a-input>
+                </div>
+              </form>
+
+              <div class="mt-24" style="text-align: right">
+                <a-button size="large" type="primary" style="min-width: 95px" @click="handleBind">
+                  {{ t("TXT_CODE_SSO_BIND_TITLE") }}
+                </a-button>
+              </div>
+            </template>
+
+            <template v-else>
+              <a-alert type="info" show-icon class="mb-16">
+                <template #message>
+                  {{ t("TXT_CODE_SSO_BIND_CREATE_HINT", { sub: ssoSub }) }}
+                </template>
+              </a-alert>
+
+              <a-input
+                :value="ssoSub"
+                class="account"
+                size="large"
+                disabled
+                :placeholder="t('TXT_CODE_SSO_BIND_CREATE_USERNAME')"
+              />
+              <a-input
+                v-model:value="createPassword"
+                class="mt-20 account"
+                type="password"
+                size="large"
+                :placeholder="t('TXT_CODE_SSO_BIND_CREATE_PASSWORD')"
+              >
+                <template #suffix>
+                  <LockOutlined style="color: rgba(0, 0, 0, 0.45)" />
+                </template>
+              </a-input>
+              <a-input
+                v-model:value="createPasswordConfirm"
+                class="mt-20 account"
+                type="password"
+                size="large"
+                :placeholder="t('TXT_CODE_SSO_BIND_CREATE_CONFIRM')"
+                @press-enter="handleCreate"
+              >
+                <template #suffix>
+                  <LockOutlined style="color: rgba(0, 0, 0, 0.45)" />
+                </template>
+              </a-input>
+
+              <div class="mt-24" style="text-align: right">
+                <a-button
+                  size="large"
+                  type="primary"
+                  style="min-width: 120px"
+                  @click="handleCreate"
+                >
+                  {{ t("TXT_CODE_SSO_BIND_CREATE_BTN") }}
+                </a-button>
+              </div>
+            </template>
           </div>
         </div>
 

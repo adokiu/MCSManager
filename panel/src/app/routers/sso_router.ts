@@ -210,11 +210,7 @@ router.get(
   "/bind-status",
   permission({ token: false, level: null, speedLimit: false }),
   async (ctx: Koa.ParameterizedContext) => {
-    const pending = Boolean(systemConfig?.ssoEnabled) && hasPendingSsoBind(ctx);
-    ctx.body = {
-      pending,
-      ssoSub: pending ? ctx.session?.["ssoBindSub"] : undefined
-    };
+    ctx.body = { pending: Boolean(systemConfig?.ssoEnabled) && hasPendingSsoBind(ctx) };
   }
 );
 

@@ -40,7 +40,6 @@ const is2Fa = ref(false);
 const loggedInUserName = ref("");
 const showLoginForm = ref(false);
 const mode = ref<"bind" | "create">("bind");
-const ssoSub = ref("");
 const createPassword = ref("");
 const createPasswordConfirm = ref("");
 
@@ -48,7 +47,6 @@ onMounted(async () => {
   try {
     const status = await fetchBindStatus();
     if (!status.value?.pending) throw new Error("no pending SSO binding");
-    ssoSub.value = status.value?.ssoSub || "";
   } catch {
     router.replace({ path: "/login", query: { sso_error: "invalid_sso_session" } });
     return;
@@ -262,17 +260,10 @@ const handleCreate = async () => {
             <template v-else>
               <a-alert type="info" show-icon class="mb-16">
                 <template #message>
-                  {{ t("TXT_CODE_SSO_BIND_CREATE_HINT", { sub: ssoSub }) }}
+                  {{ t("TXT_CODE_SSO_BIND_CREATE_HINT") }}
                 </template>
               </a-alert>
 
-              <a-input
-                :value="ssoSub"
-                class="account"
-                size="large"
-                disabled
-                :placeholder="t('TXT_CODE_SSO_BIND_CREATE_USERNAME')"
-              />
               <a-input
                 v-model:value="createPassword"
                 class="mt-20 account"

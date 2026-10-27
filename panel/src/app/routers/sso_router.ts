@@ -32,6 +32,18 @@ function hasPendingSsoBind(ctx: Koa.ParameterizedContext): boolean {
   return !userSystem.getUserBySsoSub(ssoSub);
 }
 
+// The SSO username is the IdP username (`name` / `preferred_username`), never
+// the subject identifier. The subject is still kept separately for binding.
+function getSsoUserName(claims: Record<string, unknown>): string {
+  for (const key of ["name", "preferred_username", "username"]) {
+    const value = claims[key];
+    if (typeof value === "string" && value.trim() !== "") {
+      return value.trim();
+    }
+  }
+  return "";
+}
+
 // [Public] Return SSO configuration (no secrets)
 router.get(
   "/config",
@@ -149,20 +161,21 @@ router.get(
 
     try {
       let sub: string;
+      let claims: Record<string, unknown> = {};
 
       if (isOAuth2) {
         const code = callbackUrl.searchParams.get("code");
         if (!code) throw new Error("OAuth 2.0 callback missing code parameter");
         const stateParam = callbackUrl.searchParams.get("state");
         if (stateParam !== expectedState) throw new Error("OAuth 2.0 state mismatch");
-        ({ sub } = await handleOAuth2Callback(code, codeVerifier, ssoRedirectUri));
+        ({ sub, claims } = await handleOAuth2Callback(code, codeVerifier, ssoRedirectUri));
       } else {
         // Rebuild the callback URL from the session-pinned redirect_uri (trusted)
         // plus THIS request's query string (code/state), matching the exact
         // redirect_uri the IdP saw during /authorize.
         const reconstructedUrl = new URL(ssoRedirectUri);
         reconstructedUrl.search = callbackUrl.search;
-        ({ sub } = await handleOIDCCallback(
+        ({ sub, claims } = await handleOIDCCallback(
           reconstructedUrl,
           expectedState,
           expectedNonce,
@@ -170,7 +183,8 @@ router.get(
         ));
       }
 
-      logger.info(`[SSO] Callback received for sub: ${sub}`);
+      const ssoUserName = getSsoUserName(claims);
+      logger.info(`[SSO] Callback received for sub: ${sub}, user: ${ssoUserName}`);
 
       // Check if user is already bound
       const existingUser = userSystem.getUserBySsoSub(sub);
@@ -188,6 +202,7 @@ router.get(
 
       // Not bound yet - redirect to bind page
       ctx.session!["ssoBindSub"] = sub;
+      ctx.session!["ssoBindUserName"] = ssoUserName;
       ctx.session!["ssoBindTimestamp"] = Date.now();
       ctx.session!.save();
 
@@ -297,9 +312,9 @@ router.post(
 );
 
 // [Public] Create a new MCSManager account from the pending SSO identity.
-// The username is the IdP subject (sub), the user chooses the password, and
-// the account is always a regular user. The new account is bound to the SSO
-// identity in the same operation.
+// The username is the IdP username (name/preferred_username), the user chooses
+// the password, and the account is always a regular user. The subject (sub) is
+// kept separately for SSO binding.
 router.post(
   "/create",
   permission({ token: false, level: null }),
@@ -316,6 +331,7 @@ router.post(
     if (!ctx.session) throw new Error("Session is null");
 
     const ssoSub = ctx.session["ssoBindSub"];
+    const ssoUserName = String(ctx.session["ssoBindUserName"] || "").trim();
     const ssoBindTimestamp = ctx.session["ssoBindTimestamp"];
 
     if (!ssoSub) {
@@ -324,6 +340,7 @@ router.post(
 
     if (!ssoBindTimestamp || Date.now() - ssoBindTimestamp > SSO_BIND_SESSION_TTL) {
       delete ctx.session["ssoBindSub"];
+      delete ctx.session["ssoBindUserName"];
       delete ctx.session["ssoBindTimestamp"];
       ctx.session.save();
       throw new Error("SSO binding session expired");
@@ -332,9 +349,14 @@ router.post(
     const alreadyBound = userSystem.getUserBySsoSub(ssoSub);
     if (alreadyBound) {
       delete ctx.session["ssoBindSub"];
+      delete ctx.session["ssoBindUserName"];
       delete ctx.session["ssoBindTimestamp"];
       ctx.session.save();
       throw new Error("This SSO account is already bound to another user");
+    }
+
+    if (!ssoUserName) {
+      throw new Error("The SSO provider did not return a user name");
     }
 
     const passWord = String(ctx.request.body.password);
@@ -342,7 +364,7 @@ router.post(
       throw new Error($t("TXT_CODE_router.user.passwordCheck"));
     }
 
-    const userName = String(ssoSub);
+    const userName = ssoUserName;
     if (!userSystem.validateUserName(userName)) {
       throw new Error("Invalid SSO user name");
     }
@@ -359,6 +381,7 @@ router.post(
     } as any);
 
     delete ctx.session["ssoBindSub"];
+    delete ctx.session["ssoBindUserName"];
     delete ctx.session["ssoBindTimestamp"];
 
     const token = loginSuccess(ctx, user.userName);

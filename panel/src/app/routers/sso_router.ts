@@ -6,7 +6,8 @@ import permission from "../middleware/permission";
 import validator from "../middleware/validator";
 import { logger } from "../service/log";
 import { getOperationLoggerOperator, operationLogger } from "../service/operation_logger";
-import { checkBanIp, loginSuccess } from "../service/passport_service";
+import { canManageUser } from "../service/permission_service";
+import { checkBanIp, getUserUuid, loginSuccess } from "../service/passport_service";
 import {
   buildAuthorizationUrl,
   generateCodeVerifier,
@@ -471,6 +472,8 @@ router.put(
     const uuid = String(ctx.request.body.uuid);
     const user = userSystem.getUserByUuid(uuid);
     if (!user) throw new Error("User not found");
+    const actor = userSystem.getInstance(getUserUuid(ctx));
+    if (!canManageUser(actor, user)) ctx.throw(403, $t("TXT_CODE_permission.forbidden") as string);
 
     await userSystem.unbindSso(uuid);
 

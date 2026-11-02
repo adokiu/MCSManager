@@ -49,14 +49,14 @@ function requireDaemon(uuid: string) {
 
 // [Top-level Permission]
 // Panel self-update info (current vs online version).
-router.get("/panel_info", permission({ level: ROLE.ADMIN }), async (ctx) => {
+router.get("/panel_info", permission({ level: ROLE.SUPER_ADMIN }), async (ctx) => {
   ctx.body = await getUpgradeInfo();
 });
 
 // [Top-level Permission]
 // Trigger the panel self-update. Responds immediately; the panel restarts
 // ~1s later, which drops the HTTP/socket connection briefly.
-router.post("/panel", permission({ level: ROLE.ADMIN }), async (ctx) => {
+router.post("/panel", permission({ level: ROLE.SUPER_ADMIN }), async (ctx) => {
   try {
     ctx.body = await performUpgrade();
   } catch (e: any) {
@@ -69,7 +69,7 @@ router.post("/panel", permission({ level: ROLE.ADMIN }), async (ctx) => {
 // Forward: query a daemon for its update info.
 router.get(
   "/daemon_info",
-  permission({ level: ROLE.ADMIN }),
+  permission({ level: ROLE.SUPER_ADMIN }),
   validator({ query: { uuid: String } }),
   async (ctx) => {
     const uuid = String(ctx.query.uuid);
@@ -90,7 +90,7 @@ router.get(
 // Forward: trigger a daemon self-update.
 router.post(
   "/daemon",
-  permission({ level: ROLE.ADMIN }),
+  permission({ level: ROLE.SUPER_ADMIN }),
   validator({ query: { uuid: String } }),
   async (ctx) => {
     const uuid = String(ctx.query.uuid);

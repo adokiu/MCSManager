@@ -66,7 +66,12 @@ export function loginSuccess(ctx: Koa.ParameterizedContext, userName: string) {
   ctx.session["login"] = true;
   ctx.session["userName"] = userName;
   ctx.session["uuid"] = user.uuid;
-  ctx.session["role"] = user.permission === 10 ? ROLE.ADMIN : ROLE.USER;
+  ctx.session["role"] =
+    user.permission >= ROLE.SUPER_ADMIN
+      ? ROLE.SUPER_ADMIN
+      : user.permission >= ROLE.ADMIN
+        ? ROLE.ADMIN
+        : ROLE.USER;
   ctx.session["token"] = timeUuid();
   ctx.session.save();
 

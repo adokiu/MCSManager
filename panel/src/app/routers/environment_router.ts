@@ -31,7 +31,7 @@ router.get(
 // create image
 router.post(
   "/image",
-  permission({ level: ROLE.ADMIN }),
+  permission({ level: ROLE.SUPER_ADMIN }),
   validator({ query: { daemonId: String } }),
   async (ctx) => {
     try {
@@ -53,7 +53,7 @@ router.post(
 // delete the specified image
 router.delete(
   "/image",
-  permission({ level: ROLE.ADMIN }),
+  permission({ level: ROLE.SUPER_ADMIN }),
   validator({ query: { daemonId: String, imageId: String } }),
   async (ctx) => {
     try {

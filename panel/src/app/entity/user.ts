@@ -30,7 +30,8 @@ export class User implements IUser {
 }
 
 export enum ROLE {
-  ADMIN = 10,
+  SUPER_ADMIN = 10,
+  ADMIN = 5,
   USER = 1,
   GUEST = 0,
   BAN = -1

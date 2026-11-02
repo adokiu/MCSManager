@@ -27,7 +27,7 @@ const router = new Router({ prefix: "/overview" });
 
 // [Top-level Permission]
 // Get panel configuration items
-router.get("/setting", permission({ level: ROLE.ADMIN }), async (ctx) => {
+router.get("/setting", permission({ level: ROLE.SUPER_ADMIN }), async (ctx) => {
   if (!systemConfig) {
     ctx.body = systemConfig;
     return;
@@ -37,7 +37,7 @@ router.get("/setting", permission({ level: ROLE.ADMIN }), async (ctx) => {
 
 // [Top-level Permission]
 // Update panel configuration items
-router.put("/setting", permission({ level: ROLE.ADMIN }), async (ctx) => {
+router.put("/setting", permission({ level: ROLE.SUPER_ADMIN }), async (ctx) => {
   const config = ctx.request.body as Partial<SystemConfig>;
   if (config && systemConfig) {
     // Snapshot for the audit log (masked diff is computed after all mutations)
@@ -349,7 +349,7 @@ router.get("/layout", async (ctx) => {
 
 // [Top-level Permission]
 // Set frontend layout
-router.post("/layout", permission({ level: ROLE.ADMIN }), async (ctx) => {
+router.post("/layout", permission({ level: ROLE.SUPER_ADMIN }), async (ctx) => {
   const config = ctx.request.body;
   setFrontendLayoutConfig(config);
   ctx.body = true;
@@ -357,14 +357,14 @@ router.post("/layout", permission({ level: ROLE.ADMIN }), async (ctx) => {
 
 // [Top-level Permission]
 // Reset frontend layout
-router.delete("/layout", permission({ level: ROLE.ADMIN }), async (ctx) => {
+router.delete("/layout", permission({ level: ROLE.SUPER_ADMIN }), async (ctx) => {
   resetFrontendLayoutConfig();
   ctx.body = true;
 });
 
 // [Top-level Permission]
 // Upload file to asserts directory, only administrator can upload
-router.post("/upload_assets", permission({ level: ROLE.ADMIN }), async (ctx) => {
+router.post("/upload_assets", permission({ level: ROLE.SUPER_ADMIN }), async (ctx) => {
   let files = ctx.request.files?.file;
   let tmpFile: formidable.File | undefined;
   if (Array.isArray(files)) {
@@ -396,7 +396,7 @@ router.post("/upload_assets", permission({ level: ROLE.ADMIN }), async (ctx) => 
 router.post(
   "/refresh_business_mode",
   speedLimit(5),
-  permission({ level: ROLE.ADMIN }),
+  permission({ level: ROLE.SUPER_ADMIN }),
   async (ctx) => {
     await checkBusinessMode();
     ctx.body = "OK";

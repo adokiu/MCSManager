@@ -100,7 +100,11 @@ export function useHeaderMenus() {
           return metaInfo.onlyDisplayEditMode || metaInfo.mainMenu;
         }
         if (isAdmin.value) {
-          return metaInfo.mainMenu === true && metaInfo.onlyDisplayEditMode !== true;
+          return (
+            metaInfo.mainMenu === true &&
+            metaInfo.onlyDisplayEditMode !== true &&
+            Number(appState.userInfo?.permission ?? 0) >= Number(metaInfo.permission ?? 0)
+          );
         }
         return (
           metaInfo.mainMenu === true &&

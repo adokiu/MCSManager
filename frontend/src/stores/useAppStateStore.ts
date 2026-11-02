@@ -36,7 +36,8 @@ export const useAppStateStore = createGlobalState(() => {
     return reactive(tmp);
   };
 
-  const isAdmin = computed(() => state.userInfo?.permission === 10);
+  const isAdmin = computed(() => Number(state.userInfo?.permission ?? 0) >= 5);
+  const isSuperAdmin = computed(() => Number(state.userInfo?.permission ?? 0) >= 10);
   const isLogged = computed(() => Number(state.userInfo?.permission) > 0);
 
   const updateUserInfo = async (userInfo?: LoginUserInfo) => {
@@ -85,6 +86,7 @@ export const useAppStateStore = createGlobalState(() => {
     updateUserInfo,
     updatePanelStatus,
     isAdmin,
+    isSuperAdmin,
     isLogged,
     generatedApiKey,
     state

@@ -610,7 +610,7 @@ router.post(
         parameter: targetPresetConfig,
         // targetPresetConfig is a template configured by the administrator,
         // so it is theoretically safe and does not require a permission check
-        role: ROLE.ADMIN
+        role: ROLE.SUPER_ADMIN
       });
 
       ctx.body = true;

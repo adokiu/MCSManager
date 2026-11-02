@@ -41,7 +41,7 @@ interface dataType {
 const { execute, isLoading: getUserInfoLoading } = getUserInfo();
 const { toPage } = useAppRouters();
 const { isPhone } = useScreen();
-const { state: appState } = useAppStateStore();
+const { state: appState, isSuperAdmin } = useAppStateStore();
 
 const operationForm = ref({
   name: "",
@@ -71,7 +71,7 @@ const columns = computed(() => {
       dataIndex: "permission",
       key: "permission",
       minWidth: 200,
-      customRender: (e: { text: "1" | "10" | "-1" }) => {
+      customRender: (e: { text: "1" | "5" | "10" | "-1" }) => {
         return PERMISSION_MAP[e.text] || e.text;
       }
     },
@@ -113,6 +113,8 @@ const data = ref<dataType>();
 const dataSource = computed(() => data?.value?.data);
 const selectedUsers = ref<string[]>([]);
 const currentRole = ref("");
+
+const canManageTarget = (user: BaseUserInfo) => isSuperAdmin.value || user.permission < 5;
 
 const handleToUserResources = (user: BaseUserInfo) => {
   toPage({
@@ -350,7 +352,7 @@ onMounted(async () => {
             {{ t("TXT_CODE_21b8b71a") }}
           </a-typography-text>
         </a-typography-paragraph>
-        <a-select v-model:value="formData.permission">
+        <a-select v-model:value="formData.permission" :disabled="!isSuperAdmin">
           <a-select-option v-for="(item, key, i) in PERMISSION_MAP" :key="i" :value="Number(key)">
             {{ item }}
           </a-select-option>
@@ -496,20 +498,32 @@ onMounted(async () => {
                     <a-dropdown>
                       <template #overlay>
                         <a-menu>
-                          <a-menu-item key="1" @click="handleEditUser(record)">
+                          <a-menu-item
+                            v-if="canManageTarget(record)"
+                            key="1"
+                            @click="handleEditUser(record)"
+                          >
                             {{ t("TXT_CODE_236f70aa") }}
                           </a-menu-item>
                           <a-menu-item key="2" @click="handleToUserResources(record)">
                             {{ t("TXT_CODE_4d934e3a") }}
                           </a-menu-item>
                           <a-menu-item
-                            v-if="appState.settings.ssoEnabled && record.ssoBound"
+                            v-if="
+                              canManageTarget(record) &&
+                              appState.settings.ssoEnabled &&
+                              record.ssoBound
+                            "
                             key="sso_unbind"
                             @click="showSsoUnbindConfirm(record)"
                           >
                             {{ t("TXT_CODE_SSO_UNBIND") }}
                           </a-menu-item>
-                          <a-menu-item key="3" @click="showDeleteConfirm(record)">
+                          <a-menu-item
+                            v-if="canManageTarget(record)"
+                            key="3"
+                            @click="showDeleteConfirm(record)"
+                          >
                             {{ t("TXT_CODE_ecbd7449") }}
                           </a-menu-item>
                         </a-menu>

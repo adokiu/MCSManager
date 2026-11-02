@@ -5,7 +5,8 @@ import { $t } from "../i18n";
 import permission from "../middleware/permission";
 import validator from "../middleware/validator";
 import { getOperationLoggerOperator, operationLogger } from "../service/operation_logger";
-import { register } from "../service/passport_service";
+import { canCreateUser, canManageUser } from "../service/permission_service";
+import { getUserUuid, register } from "../service/passport_service";
 import userSystem from "../service/user_service";
 
 const router = new Router({ prefix: "/auth" });
@@ -19,6 +20,8 @@ router.post(
     const userName = String(ctx.request.body.username);
     const passWord = String(ctx.request.body.password);
     const permission = Number(ctx.request.body.permission);
+    const actor = userSystem.getInstance(getUserUuid(ctx));
+    if (!canCreateUser(actor, permission)) ctx.throw(403, $t("TXT_CODE_permission.forbidden") as string);
     if (!userSystem.validatePassword(passWord))
       throw new Error($t("TXT_CODE_router.user.invalidPassword"));
     if (userSystem.existUserName(userName))
@@ -34,6 +37,11 @@ router.post(
 // Delete user
 router.del("/", permission({ level: ROLE.ADMIN }), async (ctx: Koa.ParameterizedContext) => {
   const uuids = ctx.request.body;
+  const actor = userSystem.getInstance(getUserUuid(ctx));
+  for (const iterator of uuids) {
+    const target = userSystem.getUserByUuid(iterator);
+    if (!canManageUser(actor, target)) ctx.throw(403, $t("TXT_CODE_permission.forbidden") as string);
+  }
   try {
     for (const iterator of uuids) {
       const user = userSystem.getUserByUuid(iterator);

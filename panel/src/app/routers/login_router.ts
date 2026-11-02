@@ -143,7 +143,7 @@ router.all(
 router.all(
   "/proxy",
   validator({ query: { target: String } }),
-  permission({ level: ROLE.ADMIN }),
+  permission({ level: ROLE.SUPER_ADMIN }),
   async (ctx) => {
     try {
       const response = await axios.request({

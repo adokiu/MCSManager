@@ -209,7 +209,7 @@ export function getLayoutCardPool() {
 
     {
       id: getRandomId(),
-      permission: ROLE.ADMIN,
+      permission: ROLE.SUPER_ADMIN,
       meta: {},
       type: "Settings",
       title: t("TXT_CODE_b5c7b82d"),

@@ -65,7 +65,9 @@ export interface RouterConfig {
 
 export enum ROLE {
   // eslint-disable-next-line no-unused-vars
-  ADMIN = 10,
+  SUPER_ADMIN = 10,
+  // eslint-disable-next-line no-unused-vars
+  ADMIN = 5,
   // eslint-disable-next-line no-unused-vars
   USER = 1,
   // eslint-disable-next-line no-unused-vars
@@ -89,7 +91,7 @@ const originRouterConfig: RouterConfig[] = [
     meta: {
       mainMenu: true,
       redirect: (user) => {
-        if (user?.permission === ROLE.ADMIN) {
+        if ((user?.permission ?? 0) >= ROLE.ADMIN) {
           return "/instances";
         }
         if (user?.permission && user.permission >= ROLE.USER) {
@@ -229,7 +231,7 @@ const originRouterConfig: RouterConfig[] = [
         name: t("TXT_CODE_e6c30866"),
         component: LayoutContainer,
         meta: {
-          permission: ROLE.ADMIN,
+          permission: ROLE.SUPER_ADMIN,
           mainMenu: false
         },
         children: [
@@ -238,7 +240,7 @@ const originRouterConfig: RouterConfig[] = [
             name: t("TXT_CODE_3d09f0ac"),
             component: LayoutContainer,
             meta: {
-              permission: ROLE.ADMIN,
+              permission: ROLE.SUPER_ADMIN,
               mainMenu: false
             }
           }
@@ -262,7 +264,7 @@ const originRouterConfig: RouterConfig[] = [
     name: t("TXT_CODE_b5c7b82d"),
     component: LayoutContainer,
     meta: {
-      permission: ROLE.ADMIN,
+      permission: ROLE.SUPER_ADMIN,
       mainMenu: true,
       icon: SettingOutlined,
       customClass: ["nav-button-success"]
@@ -420,7 +422,7 @@ router.beforeEach(async (to, from, next) => {
 
   if (!state.userInfo?.token) return next("/login");
 
-  if (toPagePermission > userPermission && userPermission !== ROLE.ADMIN) {
+  if (toPagePermission > userPermission) {
     return next("/customer");
   }
 

@@ -6,6 +6,8 @@ import { ROLE } from "../entity/user";
 import { $t } from "../i18n";
 import permission from "../middleware/permission";
 import { getOperationLoggerOperator, operationLogger } from "../service/operation_logger";
+import { canManageUser } from "../service/permission_service";
+import { getUserUuid } from "../service/passport_service";
 import userSystem from "../service/user_service";
 
 const router = new Router({ prefix: "/auth" });
@@ -14,6 +16,11 @@ const router = new Router({ prefix: "/auth" });
 router.put("/", permission({ level: ROLE.ADMIN }), async (ctx: Koa.ParameterizedContext) => {
   const { uuid, config } = ctx.request.body;
   const { passWord } = config;
+  const actor = userSystem.getInstance(getUserUuid(ctx));
+  const target = userSystem.getInstance(uuid);
+  if (!canManageUser(actor, target, config?.permission)) {
+    ctx.throw(403, $t("TXT_CODE_permission.forbidden") as string);
+  }
   if (passWord && !userSystem.validatePassword(passWord))
     throw new Error($t("TXT_CODE_router.user.passwordCheck"));
   try {
